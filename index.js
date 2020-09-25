@@ -12,3 +12,6 @@ exports.createClient = function (opts) {
 
     return client;
 };
+
+exports.Omemo = require('./lib/plugins/omemo');
+exports.Hints = require('./lib/plugins/hints');
