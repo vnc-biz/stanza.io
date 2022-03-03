@@ -27,7 +27,7 @@
     "async": "^2.5.0",
     "browserify-versionify": "^1.0.4",
     "faye-websocket": "^0.11.0",
-    "hostmeta": "^2.0.0",
+    "hostmeta": "github:vnc-biz/hostmeta.js#jxtconfig",
     "iana-hashes": "^1.0.2",
     "jingle": "^3.0.0",
     "jxt": "github:vnc-biz/jxt#configurable",
@@ -82,10 +82,5 @@
     "test": "make test",
     "lint": "jshint .",
     "validate": "npm ls"
-  },
-  "pre-commit": [
-    "lint",
-    "validate",
-    "test"
-  ]
+  }
 }
