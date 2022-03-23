@@ -30,7 +30,7 @@
     "hostmeta": "github:vnc-biz/hostmeta.js#jxtconfig",
     "iana-hashes": "^1.0.2",
     "jingle": "^3.0.0",
-    "jxt": "github:vnc-biz/jxt#configurable",
+    "jxt": "github:vnc-biz/jxt#rework-config",
     "jxt-xmpp": "^3.1.0",
     "jxt-xmpp-types": "^3.0.0",
     "lodash.assign": "^3.0.0",
