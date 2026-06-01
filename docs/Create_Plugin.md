@@ -1,52 +1,76 @@
-# Creating a Stanza.io Plugin
-
+# Creating a StanzaJS Plugin
 
 ```javascript
-module.exports = function (client, stanzas) {
-    // 1. Create and register our custom `mystanza` stanza type
+import { Agent, JXT } from 'stanza';
 
-    var types = stanzas.utils;
 
-    var Foo = stanzas.define({
-        name: 'mystanza',
-        element: 'foo',
-        namespace: 'http://example.com/p/foo',
-        fields: {
-            type: types.attribute('type'),
-            value: types.text()
+// 1. Declare our new custom stanza extension type
+export interface MyStanza {
+    type: string;
+    value: string;
+}
+
+// 2. Begin injecting our plugin's type information into StanzaJS.
+declare module 'stanza' {
+
+    // 3. Declare a new method for the StanzaJS agent
+    export interface Agent {
+        sendMyStanza(jid: string, data: string): void;
+    }
+
+    // 4. Declare our event types. (Event names are the fields in AgentEvents.)
+    export interface AgentEvents {
+        mystanza: Message & { mystanza: MyStanza };
+    }
+
+    // 5. Stanza definitions MUST be placed in the Stanzas namespace
+    namespace Stanzas {
+
+        // 6. Attach our new definition to Message stanzas
+        export interface Message {
+            mystanza?: MyStanza;
         }
+    }
+}
+
+
+// 7. Create a plugin function
+export default function (client: Agent, stanzas: JXT.Registry) {
+
+    // 8. Create and register our custom `mystanza` stanza definition
+    stanzas.define({
+        element: 'foo',
+        fields: {
+            type: JXT.attribute('type'),
+            value: JXT.text()
+        },
+        namespace: 'http://example.com/p/foo',
+        path: 'message.mystanza'
     });
 
-    stanzas.withMessage(function (Message) {
-        stanzas.extend(Message, Foo);
-    });
-
-
-    // 2. Add API to the stanza.io client for sending `mystanza` data
-
-    client.sendMyStanza = function (jid, foo) {
-        client.sendMessage({
+    // 9. Add API to the StanzaJS agent for sending `mystanza` data
+    client.sendMyStanza = (jid: string, data: string) {
+        return client.sendMessage({
             to: jid,
             mystanza: {
                 type: 'bar',
-                value: foo
+                value: data
             }
         });
     };
 
-
-    // 3. Listen for incoming `mystanza` data and emit our own event
-
-    client.on('message', function (msg) {
+    // 10. Listen for incoming `mystanza` data and emit our own event
+    client.on('message', msg => {
         if (msg.mystanza) {
-            client.emit('foo', msg);
+            client.emit('mystanza', msg);
         }
     });
 };
 ```
 
 ```javascript
-// 4. Load our plugin
+// 11. Load our plugin
+import MyStanzaPlugin from 'path/to/plugin';
 
-client.use(require('path/to/plugin'));
+client.use(MyStanzaPlugin);
 ```
