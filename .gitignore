@@ -2,7 +2,6 @@ node_modules
 .DS_store
 *.swp
 *.gz
-dist
 coverage
 .nyc_output
 .vscode

@@ -1,0 +1,17 @@
+// ====================================================================
+// XEP-0421: Occupant identifiers for semi-anonymous MUCs
+// --------------------------------------------------------------------
+// Source: https://xmpp.org/extensions/xep-0421.html
+// Version: 1.0.1 (2025-04-09)
+// ====================================================================
+import { childAttribute, extendMessage, extendPresence } from '../jxt';
+import { NS_OCCUPANT_0 } from '../Namespaces';
+const Protocol = [
+    extendPresence({
+        occupantId: childAttribute(NS_OCCUPANT_0, 'occupant-id', 'id')
+    }),
+    extendMessage({
+        occupantId: childAttribute(NS_OCCUPANT_0, 'occupant-id', 'id')
+    })
+];
+export default Protocol;
