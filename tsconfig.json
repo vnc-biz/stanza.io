@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "declaration": true,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "lib": ["dom", "es2022"],
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "outDir": "./dist/cjs",
+        "skipLibCheck": true,
+        "strict": true,
+        "target": "es2022"
+    },
+    "include": ["src", "typings"],
+    "exclude": ["dist"]
+}

@@ -1,91 +1,59 @@
 {
-  "name": "stanza.io",
-  "description": "Modern XMPP in the browser, with a JSON API",
-  "version": "9.1.0",
-  "author": "Lance Stout <lancestout@gmail.com>",
-  "browser": {
-    "request": "xhr",
-    "faye-websocket": false
-  },
-  "browserify": {
-    "transform": [
-      [
-        "browserify-versionify",
-        {
-          "placeholder": "__STANZAIO_VERSION__"
-        }
-      ]
-    ]
-  },
-  "bugs": "https://github.com/otalk/stanza.io/issues",
-  "contributors": [
-    "Philipp Hancke <fippo@andyet.net>",
-    "Steven Lloyd Watkin <lloyd@evilprofessor.co.uk>"
-  ],
-  "dependencies": {
-    "alt-sasl-digest-md5": "^1.0.0",
-    "async": "^2.5.0",
-    "browserify-versionify": "^1.0.4",
-    "faye-websocket": "^0.11.0",
-    "hostmeta": "^2.0.0",
-    "iana-hashes": "^1.0.2",
-    "jingle": "^3.0.0",
-    "jxt": "^3.1.0",
-    "jxt-xmpp": "^3.1.0",
-    "jxt-xmpp-types": "github:stefansaenger/jxt-xmpp-types",
-    "lodash.assign": "^3.0.0",
-    "lodash.filter": "^3.1.0",
-    "lodash.foreach": "^3.0.2",
-    "lodash.isarray": "^3.0.1",
-    "lodash.uniq": "^3.1.0",
-    "request": "^2.53.0",
-    "sasl-anonymous": "^0.1.0",
-    "sasl-external": "^0.1.0",
-    "sasl-plain": "^0.1.0",
-    "sasl-scram-sha-1": "^1.1.0",
-    "sasl-x-oauth2": "^0.1.0",
-    "saslmechanisms": "^0.1.1",
-    "uuid": "^3.0.1",
-    "wildemitter": "^1.0.1",
-    "xhr": "^2.0.1",
-    "xmpp-jid": "^1.0.0"
-  },
-  "devDependencies": {
-    "browserify": "^13.0.0",
-    "jshint": "^2.6.3",
-    "make-better": "^0.4.1",
-    "precommit-hook": "^3.0.0",
-    "tap-spec": "^4.1.0",
-    "tape": "^4.2.0",
-    "uglify-js": "^2.6.2"
-  },
-  "homepage": "http://stanza.io",
-  "keywords": [
-    "XMPP",
-    "xmpp",
-    "websocket",
-    "stanza",
-    "json",
-    "bosh",
-    "stanza.io",
-    "otalk",
-    "jingle"
-  ],
-  "license": "MIT",
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/otalk/stanza.io.git"
-  },
-  "scripts": {
-    "build": "make build",
-    "test": "make test",
-    "lint": "jshint .",
-    "validate": "npm ls"
-  },
-  "pre-commit": [
-    "lint",
-    "validate",
-    "test"
-  ]
+    "name": "stanza",
+    "description": "Modern XMPP in the browser, with a JSON API",
+    "version": "12.22.1",
+    "author": "Lance Stout <lancestout@gmail.com>",
+    "bugs": "https://github.com/legastero/stanza/issues",
+    "contributors": [
+        "Philipp Hancke <fippo@andyet.net>",
+        "Steven Lloyd Watkin <lloyd@evilprofessor.co.uk>"
+    ],
+    "dependencies": {
+        "@types/node": "^22.0.0",
+        "@types/punycode": "^2.1.0",
+        "@types/ws": "^8.18.1",
+        "punycode": "^2.1.1",
+        "sdp": "^3.0.2",
+        "ws": "^8.18.2"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.3.10",
+        "@vitest/coverage-v8": "^4.0.16",
+        "tsx": "^4.7.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.16",
+        "webpack": "^5.104.1",
+        "webpack-bundle-analyzer": "^5.1.0",
+        "webpack-cli": "^6.0.1"
+    },
+    "homepage": "https://stanzajs.org",
+    "keywords": [
+        "jingle",
+        "stanza",
+        "stanza.io",
+        "xmpp"
+    ],
+    "license": "MIT",
+    "main": "./dist/cjs/index.js",
+    "private": true,
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/legastero/stanza.git"
+    },
+    "scripts": {
+        "build": "tsx scripts/build",
+        "build:docs": "tsx scripts/build-docs",
+        "clean": "rm -rf dist",
+        "compile": "tsc -p .",
+        "compile:module": "tsc -p . --outDir ./dist/es --target es2015 --module es2015",
+        "compile:webpack": "webpack --mode production",
+        "license-check": "npx license-checker --production --excludePrivatePackages --summary",
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
+        "format": "biome format --write .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "validate": "npm ls"
+    }
 }
