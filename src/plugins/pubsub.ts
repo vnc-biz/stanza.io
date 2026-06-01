@@ -514,4 +514,60 @@ export default function (client: Agent): void {
         });
         return resp.pubsub.defaultSubscriptionOptions.form || {};
     };
+
+    client.publishOmemoDevice = async (jid: string, node: string, item: any) => {
+        return client.sendIQ({
+            from: JID.toBare(client.jid),
+            pubsub: {
+                publish: { node, item },
+                publishOptions: {
+                    form: {
+                        fields: [
+                            { name: 'FORM_TYPE', type: 'hidden', value: 'http://jabber.org/protocol/pubsub#publish-options' },
+                            { name: 'pubsub#access_model', value: 'open' }
+                        ],
+                        type: 'submit'
+                    }
+                }
+            },
+            to: jid,
+            type: 'set'
+        });
+    };
+
+    client.publishOmemoBundle = async (jid: string, node: string, item: any) => {
+        return client.sendIQ({
+            from: JID.toBare(client.jid),
+            pubsub: {
+                publish: { node, item },
+                publishOptions: {
+                    form: {
+                        fields: [
+                            { name: 'FORM_TYPE', type: 'hidden', value: 'http://jabber.org/protocol/pubsub#publish-options' },
+                            { name: 'pubsub#max_items', value: '100' },
+                            { name: 'pubsub#access_model', value: 'open' }
+                        ],
+                        type: 'submit'
+                    }
+                }
+            },
+            to: jid,
+            type: 'set'
+        });
+    };
+
+    client.getOmemoItems = async (jid: string, node: string, opts: any = {}) => {
+        return client.sendIQ({
+            pubsub: {
+                retrieve: {
+                    item: opts.item,
+                    max: opts.max,
+                    node
+                },
+                rsm: opts.rsm
+            },
+            to: jid,
+            type: 'get'
+        });
+    };
 }

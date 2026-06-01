@@ -17,6 +17,7 @@ export * from './pep';
 export * from './pubsub';
 export * from './roster';
 export * from './sasl';
+export * from './omemo';
 export * from './sharing';
 
 import Account from './account';
@@ -36,6 +37,7 @@ import PEP from './pep';
 import PubSub from './pubsub';
 import Roster from './roster';
 import SASL from './sasl';
+import OMEMO from './omemo';
 import Sharing from './sharing';
 
 export function core(client: Agent): void {
@@ -58,6 +60,7 @@ export default function (client: Agent): void {
     client.use(MAM);
     client.use(MUC);
     client.use(PEP);
+    client.use(OMEMO);
     client.use(PubSub);
     client.use(Roster);
     client.use(Sharing);
