@@ -259,7 +259,7 @@ export class OmemoClient {
             identityKeyPair = await KeyHelper.generateIdentityKeyPair();
             isNew = true;
 
-            await this.store.storeIdentityKeyPair(identityKeyPair);
+            await this.store.storeIdentityKeyPair(identityKeyPair!);
             await this.store.storeLocalRegistration(this.buildDeviceInfo(registrationId));
         }
 
@@ -711,7 +711,7 @@ export class OmemoClient {
         const authTag = ciphertextWithAuth.slice(ciphertextWithAuth.byteLength - 16);
 
         return {
-            header: await this.createHeader(isMUC, gcmKey, authTag, iv, recipients),
+            header: await this.createHeader(isMUC, gcmKey.buffer, authTag.buffer, iv.buffer, recipients),
             payload: OmemoUtils.arrayBufferToBase64String(ciphertext)
         };
     }

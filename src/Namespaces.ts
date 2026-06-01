@@ -382,7 +382,6 @@ export const NS_OMEMO_AXOLOTL_BUNDLE = (deviceId: string): string =>
 export const NS_OMEMO_1 = 'urn:xmpp:omemo:1';
 export const NS_OMEMO_1_DEVICES = 'urn:xmpp:omemo:1:devices';
 export const NS_OMEMO_1_BUNDLES = 'urn:xmpp:omemo:1:bundles';
-export const NS_EME_0 = 'urn:xmpp:eme:0';
 
 // XEP-0421
 export const NS_OCCUPANT_0 = 'urn:xmpp:occupant-id:0';
