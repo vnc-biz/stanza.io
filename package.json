@@ -35,12 +35,15 @@
     ],
     "license": "MIT",
     "main": "./dist/cjs/index.js",
-    "private": true,
+    "files": [
+        "dist/"
+    ],
     "repository": {
         "type": "git",
         "url": "https://github.com/legastero/stanza.git"
     },
     "scripts": {
+        "prepare": "npm run build",
         "build": "tsx scripts/build",
         "build:docs": "tsx scripts/build-docs",
         "clean": "rm -rf dist",
