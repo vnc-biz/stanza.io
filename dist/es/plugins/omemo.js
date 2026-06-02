@@ -534,7 +534,7 @@ export class OmemoClient {
     sendMessage(rawMessage_1) {
         return __awaiter(this, arguments, void 0, function* (rawMessage, members = [rawMessage.to, rawMessage.from], encryptedMsgHint = ENCRYPTED_MSG_DEFAULT_HINT) {
             const isMUC = rawMessage.type === 'groupchat';
-            const omemoMsg = Object.assign(Object.assign({}, rawMessage), { body: encryptedMsgHint, store: true, encrypted: yield this.createMessage(isMUC, rawMessage.body, members), encryption: {
+            const omemoMsg = Object.assign(Object.assign({}, rawMessage), { body: encryptedMsgHint, processingHints: { store: true }, encrypted: yield this.createMessage(isMUC, rawMessage.body, members), encryption: {
                     namespace: NS_OMEMO_1,
                     name: 'OMEMO'
                 } });

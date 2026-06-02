@@ -98,6 +98,7 @@ __exportStar(require("./xep0359"), exports);
 __exportStar(require("./xep0363"), exports);
 __exportStar(require("./xep0380"), exports);
 __exportStar(require("./xep0384"), exports);
+__exportStar(require("./xep0384v1"), exports);
 __exportStar(require("./xep0421"), exports);
 __exportStar(require("./xrd"), exports);
 const rfc3921_1 = __importDefault(require("./rfc3921"));
@@ -180,6 +181,7 @@ const xep0359_1 = __importDefault(require("./xep0359"));
 const xep0363_1 = __importDefault(require("./xep0363"));
 const xep0380_1 = __importDefault(require("./xep0380"));
 const xep0384_1 = __importDefault(require("./xep0384"));
+const xep0384v1_1 = __importDefault(require("./xep0384v1"));
 const xep0421_1 = __importDefault(require("./xep0421"));
 const xrd_1 = __importDefault(require("./xrd"));
 const Protocol = [
@@ -263,6 +265,7 @@ const Protocol = [
     xep0363_1.default,
     xep0380_1.default,
     xep0384_1.default,
+    xep0384v1_1.default,
     xep0421_1.default,
     xrd_1.default
 ];

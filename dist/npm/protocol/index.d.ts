@@ -99,6 +99,7 @@ export * from './xep0359';
 export * from './xep0363';
 export * from './xep0380';
 export * from './xep0384';
+export * from './xep0384v1';
 export * from './xep0421';
 export * from './xrd';
 declare const Protocol: Array<DefinitionOptions | DefinitionOptions[]>;

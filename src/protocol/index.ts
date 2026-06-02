@@ -98,6 +98,7 @@ export * from './xep0359';
 export * from './xep0363';
 export * from './xep0380';
 export * from './xep0384';
+export * from './xep0384v1';
 export * from './xep0421';
 export * from './xrd';
 
@@ -181,6 +182,7 @@ import XEP0359 from './xep0359';
 import XEP0363 from './xep0363';
 import XEP0380 from './xep0380';
 import XEP0384 from './xep0384';
+import XEP0384V1 from './xep0384v1';
 import XEP0421 from './xep0421';
 import XRD from './xrd';
 
@@ -265,6 +267,7 @@ const Protocol: Array<DefinitionOptions | DefinitionOptions[]> = [
     XEP0363,
     XEP0380,
     XEP0384,
+    XEP0384V1,
     XEP0421,
     XRD
 ];

@@ -542,7 +542,7 @@ class OmemoClient {
         const omemoMsg = {
             ...rawMessage,
             body: encryptedMsgHint,
-            store: true,
+            processingHints: { store: true }, // XEP-0334: tells server to archive this message
             encrypted: await this.createMessage(isMUC, rawMessage.body, members),
             encryption: {
                 namespace: Namespaces_1.NS_OMEMO_1,
