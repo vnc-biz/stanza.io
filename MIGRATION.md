@@ -116,23 +116,22 @@ client.disconnect();        // always graceful + 1s hard-timeout fallback
 | *(not present)* | `'connected'` | NEW — transport TCP connected (before stream open) |
 | *(not present)* | `'bosh:terminate'` | NEW — BOSH session ended |
 
-### 4.2 Disconnection Event — Critical Change
+### 4.2 Disconnection Event — No Change for Consumer Code
 
 ```ts
-// OLD — listen for 'disconnected' to trigger reconnect
+// Both v9 and v12 — keep listening to 'disconnected'
 client.on('disconnected', () => {
-    scheduleReconnect();
-});
-
-// NEW — listen for '--transport-disconnected' instead
-client.on('--transport-disconnected', () => {
     scheduleReconnect();
 });
 ```
 
-> **Why:** In v12 the transport uses a Duplex stream. `'--transport-disconnected'` fires
-> after the stream queue drains and SM hibernation completes — guaranteed single emission,
-> no race condition with the socket.
+> **How it works in v12:** The transport emits the internal `'--transport-disconnected'`
+> signal when the socket closes. The Client listens to that internally, drains its queues,
+> calls `sm.hibernate()`, runs auto-reconnect (if `autoReconnect: true` is configured),
+> and *then* emits `'disconnected'` for consumer code. So `'disconnected'` is still the
+> correct event to listen to — it now fires later (after queues drain) which is safer.
+>
+> `'--transport-disconnected'` is an internal event — do not listen to it in your app.
 
 ### 4.3 PubSub Events
 
@@ -502,8 +501,8 @@ client.transport?.hasStream    // boolean | undefined
 // OLD — listen on transport directly
 client.transport.on('disconnected', handler);
 
-// NEW — listen on client (transport events bubble up)
-client.on('--transport-disconnected', handler);
+// NEW — listen on client as before
+client.on('disconnected', handler);  // same event, fires after queue drain + SM hibernate
 ```
 
 ---
@@ -514,7 +513,7 @@ client.on('--transport-disconnected', handler);
 
 - [ ] Change package name: `stanza.io` → `stanza` in all imports
 - [ ] Replace `new JID(str)` with `JID.parse(str)` / `JID.toBare()` / `JID.getLocal()` etc.
-- [ ] Rename `'disconnected'` reconnect listener → `'--transport-disconnected'`
+- [ ] Keep `'disconnected'` listener as-is — it still fires in v12 (after queue drain + SM hibernate)
 - [ ] Remove `client.disconnect(true)` — pass no argument or call `client.disconnect()`
 - [ ] Convert `client.sendIq(...)` → `client.sendIQ(...)` (capital Q)
 - [ ] Remove all pubsub callbacks — convert to `await`
