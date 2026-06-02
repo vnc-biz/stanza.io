@@ -10,26 +10,65 @@
 // The <encryption xmlns='urn:xmpp:eme:0'> element is in xep0380.ts
 // (mapped to message.encryptionMethod).
 // ====================================================================
-import { attribute, booleanAttribute, childText, pubsubItemContentAliases, splicePath, text } from '../jxt';
+import { attribute, booleanAttribute, childText, createElement, pubsubItemContentAliases, splicePath, text } from '../jxt';
 import { NS_OMEMO_1, NS_OMEMO_1_BUNDLES, NS_OMEMO_1_DEVICES } from '../Namespaces';
+/**
+ * Custom field for OMEMO v1 device list.
+ * Handles both integer[] and OmemoDeviceInfo[] on export (the OMEMO plugin passes objects).
+ * Returns integer[] on import (processDevices() converts to {id,label} objects).
+ */
+function omemoDeviceList(namespace) {
+    return {
+        importer(xml) {
+            const result = [];
+            const children = xml.getChildren('device', namespace || xml.getNamespace());
+            for (const child of children) {
+                const id = child.getAttribute('id');
+                if (id !== undefined) {
+                    // Return OmemoDeviceInfo objects so processDevices() works correctly
+                    const label = child.getAttribute('label');
+                    result.push(Object.assign({ id: parseInt(id, 10) }, (label ? { label } : {})));
+                }
+            }
+            return result;
+        },
+        exporter(xml, values, context) {
+            if (!Array.isArray(values))
+                return;
+            for (const value of values) {
+                const id = typeof value === 'object' && value !== null ? value.id : value;
+                if (id === undefined || id === null)
+                    continue;
+                const child = createElement(namespace || xml.getNamespace(), 'device', context.namespace, xml);
+                child.setAttribute('id', id.toString());
+                const label = typeof value === 'object' && (value === null || value === void 0 ? void 0 : value.label);
+                if (label)
+                    child.setAttribute('label', label);
+                xml.appendChild(child);
+            }
+        }
+    };
+}
 const Protocol = [
-    // <key rid="..." prekey="...">base64</key> — must be defined before header
+    // <key rid="..." prekey="...">base64</key> — direct children of <header>
+    // Use aliases (like xep0384.ts axolotl format) NOT splicePath.
+    // splicePath expects a wrapper element; OMEMO keys are flat direct children.
     {
+        aliases: [{ path: 'encrypted.header.keys', multiple: true }],
         element: 'key',
         fields: {
             content: text(),
             prekey: booleanAttribute('prekey'),
             rid: attribute('rid')
         },
-        namespace: NS_OMEMO_1,
-        path: 'omemo1Key'
+        namespace: NS_OMEMO_1
     },
     // <header sid="..."><iv>...</iv><key ...>...</key></header>
+    // Note: keys field is NOT here — populated via the alias above
     {
         element: 'header',
         fields: {
             iv: childText(NS_OMEMO_1, 'iv'),
-            keys: splicePath(NS_OMEMO_1, 'key', 'omemo1Key', true),
             sid: attribute('sid')
         },
         namespace: NS_OMEMO_1,
@@ -45,22 +84,13 @@ const Protocol = [
         namespace: NS_OMEMO_1,
         path: 'encrypted'
     },
-    // <device id="..." label="..."> inside <devices>
-    {
-        element: 'device',
-        fields: {
-            id: attribute('id'),
-            label: attribute('label')
-        },
-        namespace: NS_OMEMO_1,
-        path: 'omemo1Device'
-    },
     // <devices xmlns='urn:xmpp:omemo:1'> as pubsub item content
+    // Custom device list field — handles both integer[] and OmemoDeviceInfo[] on export
     {
         aliases: pubsubItemContentAliases(),
         element: 'devices',
         fields: {
-            devices: splicePath(NS_OMEMO_1, 'device', 'omemo1Device', true)
+            devices: omemoDeviceList(NS_OMEMO_1)
         },
         namespace: NS_OMEMO_1,
         path: 'deviceList',

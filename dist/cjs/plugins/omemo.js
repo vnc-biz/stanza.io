@@ -174,7 +174,8 @@ class OmemoClient {
         if (!published || published.length === 0) {
             return;
         }
-        let devices = published[0]?.deviceList?.devices || [];
+        // v12: pubsub event item content is at item.content (pubsubItemContentAliases)
+        let devices = published[0]?.content?.devices || [];
         devices = this.processDevices(devices);
         const from = typeof msg.from === 'string' ? msg.from : JID.toBare(msg.from);
         await this.storeDevices(from, devices);
@@ -255,8 +256,9 @@ class OmemoClient {
         }
         let devices = [];
         try {
-            // v12 pubsub uses fetch.items[] not retrieve.item
-            devices = deviceList?.pubsub?.fetch?.items?.[0]?.deviceList?.devices || [];
+            // v12: content is at item.content.devices (pubsubItemContentAliases → pubsubitem.content)
+            // NOT at item.deviceList.devices
+            devices = deviceList?.pubsub?.fetch?.items?.[0]?.content?.devices || [];
         }
         catch (e) {
             console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
@@ -266,7 +268,7 @@ class OmemoClient {
         return devices;
     }
     async getDeviceKeyBundle(recipient, registrationId) {
-        const recipientJid = typeof recipient === 'string' ? recipient : JID.toBare(recipient);
+        const recipientJid = JID.toBare(recipient); // v12: always call toBare
         let keyBundle;
         try {
             keyBundle = await this.client.getOmemoItems(recipientJid, Namespaces_1.NS_OMEMO_1_BUNDLES, {
@@ -278,8 +280,8 @@ class OmemoClient {
             return null;
         }
         try {
-            // v12 pubsub uses fetch.items[] not retrieve.item
-            return keyBundle?.pubsub?.fetch?.items?.[0]?.omemo1Bundle || null;
+            // v12: content is at item.content (pubsubItemContentAliases → pubsubitem.content)
+            return keyBundle?.pubsub?.fetch?.items?.[0]?.content || null;
         }
         catch (e) {
             console.warn('[OmemoClient][getDeviceKeyBundle] error parsing bundle', keyBundle);
@@ -338,10 +340,10 @@ class OmemoClient {
             console.error('[OmemoClient][announceDevices] error removing old devices:', e);
         }
         const localDeviceId = await this.store.getLocalRegistrationId();
-        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare
         await this.client.publishOmemoDevice(clientJidBare, Namespaces_1.NS_OMEMO_1_DEVICES, {
             id: `${localDeviceId}`,
-            deviceList: { devices }
+            content: { devices, itemType: Namespaces_1.NS_OMEMO_1_DEVICES }
         });
     }
     async announce(device, identityKeyPair, isNew, removePreKey = null, isForceGetAnnouncedDevices = false) {
@@ -372,11 +374,11 @@ class OmemoClient {
             return;
         }
         const bundle = await this.refillPreKeys(keyBundle, removePreKey);
-        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare
         try {
             await this.client.publishOmemoBundle(clientJidBare, Namespaces_1.NS_OMEMO_1_BUNDLES, {
                 id: registrationId,
-                bundle
+                content: { ...bundle, itemType: Namespaces_1.NS_OMEMO_1_BUNDLES }
             });
         }
         catch (e) {
@@ -419,7 +421,7 @@ class OmemoClient {
         const deviceIds = devices.map(d => d.id);
         const sessions = [];
         const ownDeviceId = await this.store.getLocalRegistrationId();
-        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare
         if (recipientBareJid === clientJidBare && !deviceIds.includes(ownDeviceId)) {
             deviceIds.push(ownDeviceId);
         }
@@ -546,7 +548,8 @@ class OmemoClient {
             body: encryptedMsgHint,
             processingHints: { store: true }, // XEP-0334: tells server to archive this message
             encrypted: await this.createMessage(isMUC, rawMessage.body, members),
-            encryption: {
+            // xep0380 maps <encryption xmlns='urn:xmpp:eme:0'> to message.encryptionMethod
+            encryptionMethod: {
                 namespace: Namespaces_1.NS_OMEMO_1,
                 name: 'OMEMO'
             }
@@ -574,7 +577,8 @@ class OmemoClient {
         };
     }
     async createHeader(isMUC, key, auth, iv, recipients) {
-        const uniqueRecipients = new Set(recipients.map(jid => (typeof jid === 'string' ? jid : JID.toBare(jid))));
+        // v12: always call toBare — recipients may be full JIDs (strings with resource)
+        const uniqueRecipients = new Set(recipients.map(jid => JID.toBare(jid)));
         const encryptedKeys = [];
         const payload = new ArrayBuffer(key.byteLength + auth.byteLength);
         const payloadArr = new Uint8Array(payload);

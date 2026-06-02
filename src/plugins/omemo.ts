@@ -203,7 +203,8 @@ export class OmemoClient {
             return;
         }
 
-        let devices: OmemoDeviceInfo[] = published[0]?.deviceList?.devices || [];
+        // v12: pubsub event item content is at item.content (pubsubItemContentAliases)
+        let devices: OmemoDeviceInfo[] = published[0]?.content?.devices || [];
         devices = this.processDevices(devices);
 
         const from = typeof msg.from === 'string' ? msg.from : JID.toBare(msg.from);
@@ -308,8 +309,9 @@ export class OmemoClient {
 
         let devices: OmemoDeviceInfo[] = [];
         try {
-            // v12 pubsub uses fetch.items[] not retrieve.item
-            devices = deviceList?.pubsub?.fetch?.items?.[0]?.deviceList?.devices || [];
+            // v12: content is at item.content.devices (pubsubItemContentAliases → pubsubitem.content)
+            // NOT at item.deviceList.devices
+            devices = deviceList?.pubsub?.fetch?.items?.[0]?.content?.devices || [];
         } catch (e) {
             console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
         }
@@ -321,7 +323,7 @@ export class OmemoClient {
 
     async getDeviceKeyBundle(recipient: string | any, registrationId: number): Promise<any> {
         const recipientJid =
-            typeof recipient === 'string' ? recipient : JID.toBare(recipient);
+            JID.toBare(recipient);  // v12: always call toBare
         let keyBundle: any;
         try {
             keyBundle = await this.client.getOmemoItems(recipientJid, NS_OMEMO_1_BUNDLES, {
@@ -333,8 +335,8 @@ export class OmemoClient {
         }
 
         try {
-            // v12 pubsub uses fetch.items[] not retrieve.item
-            return keyBundle?.pubsub?.fetch?.items?.[0]?.omemo1Bundle || null;
+            // v12: content is at item.content (pubsubItemContentAliases → pubsubitem.content)
+            return keyBundle?.pubsub?.fetch?.items?.[0]?.content || null;
         } catch (e) {
             console.warn('[OmemoClient][getDeviceKeyBundle] error parsing bundle', keyBundle);
             return null;
@@ -397,11 +399,11 @@ export class OmemoClient {
 
         const localDeviceId = await this.store.getLocalRegistrationId();
         const clientJidBare =
-            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
+            JID.toBare(this.client.jid);  // v12: always call toBare
 
         await this.client.publishOmemoDevice(clientJidBare, NS_OMEMO_1_DEVICES, {
             id: `${localDeviceId}`,
-            deviceList: { devices }
+            content: { devices, itemType: NS_OMEMO_1_DEVICES }
         });
     }
 
@@ -447,12 +449,12 @@ export class OmemoClient {
 
         const bundle = await this.refillPreKeys(keyBundle, removePreKey);
         const clientJidBare =
-            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
+            JID.toBare(this.client.jid);  // v12: always call toBare
 
         try {
             await this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
                 id: registrationId,
-                bundle
+                content: { ...bundle, itemType: NS_OMEMO_1_BUNDLES }
             });
         } catch (e) {
             console.warn('[OmemoClient][announce] publishOmemoBundle failed (server timeout?), continuing', e);
@@ -519,7 +521,7 @@ export class OmemoClient {
         const ownDeviceId = await this.store.getLocalRegistrationId();
 
         const clientJidBare =
-            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
+            JID.toBare(this.client.jid);  // v12: always call toBare
 
         if (recipientBareJid === clientJidBare && !deviceIds.includes(ownDeviceId)) {
             deviceIds.push(ownDeviceId);
@@ -695,7 +697,8 @@ export class OmemoClient {
             body: encryptedMsgHint,
             processingHints: { store: true },  // XEP-0334: tells server to archive this message
             encrypted: await this.createMessage(isMUC, rawMessage.body, members),
-            encryption: {
+            // xep0380 maps <encryption xmlns='urn:xmpp:eme:0'> to message.encryptionMethod
+            encryptionMethod: {
                 namespace: NS_OMEMO_1,
                 name: 'OMEMO'
             }
@@ -740,8 +743,9 @@ export class OmemoClient {
         iv: ArrayBuffer,
         recipients: any[]
     ): Promise<any> {
+        // v12: always call toBare — recipients may be full JIDs (strings with resource)
         const uniqueRecipients = new Set(
-            recipients.map(jid => (typeof jid === 'string' ? jid : JID.toBare(jid)))
+            recipients.map(jid => JID.toBare(jid))
         );
 
         const encryptedKeys: any[] = [];
