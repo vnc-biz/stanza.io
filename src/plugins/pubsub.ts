@@ -559,8 +559,9 @@ export default function (client: Agent): void {
     client.getOmemoItems = async (jid: string, node: string, opts: any = {}) => {
         return client.sendIQ({
             pubsub: {
-                retrieve: {
-                    item: opts.item,
+                context: 'user',
+                fetch: {
+                    items: opts.item ? [opts.item] : undefined,
                     max: opts.max,
                     node
                 },

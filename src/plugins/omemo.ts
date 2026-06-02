@@ -273,7 +273,7 @@ export class OmemoClient {
     async getAnnouncedDevices(jid?: string | null, force = true): Promise<OmemoDeviceInfo[]> {
         let localUserJid = this.client.jid;
         const localUserJidBare =
-            typeof localUserJid === 'string' ? localUserJid : JID.toBare(localUserJid);
+            JID.toBare(localUserJid);  // v12: always call toBare — jid may be full JID string
 
         if (!jid || jid === localUserJidBare) {
             jid = localUserJidBare;
@@ -308,7 +308,8 @@ export class OmemoClient {
 
         let devices: OmemoDeviceInfo[] = [];
         try {
-            devices = deviceList?.pubsub?.retrieve?.item?.deviceList?.devices || [];
+            // v12 pubsub uses fetch.items[] not retrieve.item
+            devices = deviceList?.pubsub?.fetch?.items?.[0]?.deviceList?.devices || [];
         } catch (e) {
             console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
         }
@@ -332,7 +333,8 @@ export class OmemoClient {
         }
 
         try {
-            return keyBundle?.pubsub?.retrieve?.item?.bundle || null;
+            // v12 pubsub uses fetch.items[] not retrieve.item
+            return keyBundle?.pubsub?.fetch?.items?.[0]?.omemo1Bundle || null;
         } catch (e) {
             console.warn('[OmemoClient][getDeviceKeyBundle] error parsing bundle', keyBundle);
             return null;
@@ -395,7 +397,7 @@ export class OmemoClient {
 
         const localDeviceId = await this.store.getLocalRegistrationId();
         const clientJidBare =
-            typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
 
         await this.client.publishOmemoDevice(clientJidBare, NS_OMEMO_1_DEVICES, {
             id: `${localDeviceId}`,
@@ -445,7 +447,7 @@ export class OmemoClient {
 
         const bundle = await this.refillPreKeys(keyBundle, removePreKey);
         const clientJidBare =
-            typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
 
         try {
             await this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
@@ -517,7 +519,7 @@ export class OmemoClient {
         const ownDeviceId = await this.store.getLocalRegistrationId();
 
         const clientJidBare =
-            typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            JID.toBare(this.client.jid)  // v12: always call toBare — jid may be full JID string;
 
         if (recipientBareJid === clientJidBare && !deviceIds.includes(ownDeviceId)) {
             deviceIds.push(ownDeviceId);
@@ -691,7 +693,7 @@ export class OmemoClient {
         const omemoMsg = {
             ...rawMessage,
             body: encryptedMsgHint,
-            store: true,
+            processingHints: { store: true },  // XEP-0334: tells server to archive this message
             encrypted: await this.createMessage(isMUC, rawMessage.body, members),
             encryption: {
                 namespace: NS_OMEMO_1,

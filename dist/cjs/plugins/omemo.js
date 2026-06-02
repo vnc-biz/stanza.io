@@ -223,7 +223,7 @@ class OmemoClient {
     }
     async getAnnouncedDevices(jid, force = true) {
         let localUserJid = this.client.jid;
-        const localUserJidBare = typeof localUserJid === 'string' ? localUserJid : JID.toBare(localUserJid);
+        const localUserJidBare = JID.toBare(localUserJid); // v12: always call toBare — jid may be full JID string
         if (!jid || jid === localUserJidBare) {
             jid = localUserJidBare;
         }
@@ -255,7 +255,8 @@ class OmemoClient {
         }
         let devices = [];
         try {
-            devices = deviceList?.pubsub?.retrieve?.item?.deviceList?.devices || [];
+            // v12 pubsub uses fetch.items[] not retrieve.item
+            devices = deviceList?.pubsub?.fetch?.items?.[0]?.deviceList?.devices || [];
         }
         catch (e) {
             console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
@@ -277,7 +278,8 @@ class OmemoClient {
             return null;
         }
         try {
-            return keyBundle?.pubsub?.retrieve?.item?.bundle || null;
+            // v12 pubsub uses fetch.items[] not retrieve.item
+            return keyBundle?.pubsub?.fetch?.items?.[0]?.omemo1Bundle || null;
         }
         catch (e) {
             console.warn('[OmemoClient][getDeviceKeyBundle] error parsing bundle', keyBundle);
@@ -336,7 +338,7 @@ class OmemoClient {
             console.error('[OmemoClient][announceDevices] error removing old devices:', e);
         }
         const localDeviceId = await this.store.getLocalRegistrationId();
-        const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
         await this.client.publishOmemoDevice(clientJidBare, Namespaces_1.NS_OMEMO_1_DEVICES, {
             id: `${localDeviceId}`,
             deviceList: { devices }
@@ -370,7 +372,7 @@ class OmemoClient {
             return;
         }
         const bundle = await this.refillPreKeys(keyBundle, removePreKey);
-        const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
         try {
             await this.client.publishOmemoBundle(clientJidBare, Namespaces_1.NS_OMEMO_1_BUNDLES, {
                 id: registrationId,
@@ -417,7 +419,7 @@ class OmemoClient {
         const deviceIds = devices.map(d => d.id);
         const sessions = [];
         const ownDeviceId = await this.store.getLocalRegistrationId();
-        const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+        const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
         if (recipientBareJid === clientJidBare && !deviceIds.includes(ownDeviceId)) {
             deviceIds.push(ownDeviceId);
         }

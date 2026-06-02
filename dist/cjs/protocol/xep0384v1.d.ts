@@ -3,7 +3,6 @@ import { NS_OMEMO_1_BUNDLES, NS_OMEMO_1_DEVICES } from '../Namespaces';
 declare module './' {
     interface Message {
         encrypted?: OMEMO1Encrypted;
-        encryption?: OMEMO1Encryption;
     }
 }
 export interface OMEMO1Encrypted {
@@ -42,10 +41,6 @@ export interface OMEMO1Device {
 export interface OMEMO1DeviceList {
     itemType?: typeof NS_OMEMO_1_DEVICES;
     devices?: OMEMO1Device[];
-}
-export interface OMEMO1Encryption {
-    name?: string;
-    namespace?: string;
 }
 declare const Protocol: DefinitionOptions[];
 export default Protocol;

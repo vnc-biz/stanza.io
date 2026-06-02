@@ -195,9 +195,9 @@ export class OmemoClient {
     }
     getAnnouncedDevices(jid_1) {
         return __awaiter(this, arguments, void 0, function* (jid, force = true) {
-            var _a, _b, _c, _d, _e, _f;
+            var _a, _b, _c, _d, _e, _f, _g;
             let localUserJid = this.client.jid;
-            const localUserJidBare = typeof localUserJid === 'string' ? localUserJid : JID.toBare(localUserJid);
+            const localUserJidBare = JID.toBare(localUserJid); // v12: always call toBare — jid may be full JID string
             if (!jid || jid === localUserJidBare) {
                 jid = localUserJidBare;
             }
@@ -229,7 +229,8 @@ export class OmemoClient {
             }
             let devices = [];
             try {
-                devices = ((_f = (_e = (_d = (_c = deviceList === null || deviceList === void 0 ? void 0 : deviceList.pubsub) === null || _c === void 0 ? void 0 : _c.retrieve) === null || _d === void 0 ? void 0 : _d.item) === null || _e === void 0 ? void 0 : _e.deviceList) === null || _f === void 0 ? void 0 : _f.devices) || [];
+                // v12 pubsub uses fetch.items[] not retrieve.item
+                devices = ((_g = (_f = (_e = (_d = (_c = deviceList === null || deviceList === void 0 ? void 0 : deviceList.pubsub) === null || _c === void 0 ? void 0 : _c.fetch) === null || _d === void 0 ? void 0 : _d.items) === null || _e === void 0 ? void 0 : _e[0]) === null || _f === void 0 ? void 0 : _f.deviceList) === null || _g === void 0 ? void 0 : _g.devices) || [];
             }
             catch (e) {
                 console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
@@ -241,7 +242,7 @@ export class OmemoClient {
     }
     getDeviceKeyBundle(recipient, registrationId) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c;
+            var _a, _b, _c, _d;
             const recipientJid = typeof recipient === 'string' ? recipient : JID.toBare(recipient);
             let keyBundle;
             try {
@@ -254,7 +255,8 @@ export class OmemoClient {
                 return null;
             }
             try {
-                return ((_c = (_b = (_a = keyBundle === null || keyBundle === void 0 ? void 0 : keyBundle.pubsub) === null || _a === void 0 ? void 0 : _a.retrieve) === null || _b === void 0 ? void 0 : _b.item) === null || _c === void 0 ? void 0 : _c.bundle) || null;
+                // v12 pubsub uses fetch.items[] not retrieve.item
+                return ((_d = (_c = (_b = (_a = keyBundle === null || keyBundle === void 0 ? void 0 : keyBundle.pubsub) === null || _a === void 0 ? void 0 : _a.fetch) === null || _b === void 0 ? void 0 : _b.items) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.omemo1Bundle) || null;
             }
             catch (e) {
                 console.warn('[OmemoClient][getDeviceKeyBundle] error parsing bundle', keyBundle);
@@ -315,7 +317,7 @@ export class OmemoClient {
                 console.error('[OmemoClient][announceDevices] error removing old devices:', e);
             }
             const localDeviceId = yield this.store.getLocalRegistrationId();
-            const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
             yield this.client.publishOmemoDevice(clientJidBare, NS_OMEMO_1_DEVICES, {
                 id: `${localDeviceId}`,
                 deviceList: { devices }
@@ -351,7 +353,7 @@ export class OmemoClient {
                 return;
             }
             const bundle = yield this.refillPreKeys(keyBundle, removePreKey);
-            const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
             try {
                 yield this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
                     id: registrationId,
@@ -402,7 +404,7 @@ export class OmemoClient {
             const deviceIds = devices.map(d => d.id);
             const sessions = [];
             const ownDeviceId = yield this.store.getLocalRegistrationId();
-            const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
+            const clientJidBare = JID.toBare(this.client.jid); // v12: always call toBare — jid may be full JID string;
             if (recipientBareJid === clientJidBare && !deviceIds.includes(ownDeviceId)) {
                 deviceIds.push(ownDeviceId);
             }

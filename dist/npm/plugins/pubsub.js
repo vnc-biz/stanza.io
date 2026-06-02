@@ -429,8 +429,9 @@ function default_1(client) {
     client.getOmemoItems = async (jid, node, opts = {}) => {
         return client.sendIQ({
             pubsub: {
-                retrieve: {
-                    item: opts.item,
+                context: 'user',
+                fetch: {
+                    items: opts.item ? [opts.item] : undefined,
                     max: opts.max,
                     node
                 },
