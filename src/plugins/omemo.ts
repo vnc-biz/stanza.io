@@ -286,7 +286,8 @@ export class OmemoClient {
                     jid: localUserJidBare
                 });
             } catch (e) {
-                console.error(`[OmemoClient][getAnnouncedDevices] subscribe to user ${jid}`, e);
+                // Server may not support PEP subscriptions — not fatal, continue with getItems
+                console.warn(`[OmemoClient][getAnnouncedDevices] subscribe to user ${jid} failed (server may not support PEP)`, (e as any)?.error?.condition || e);
             }
             this.subscriptions.add(jid);
         }
@@ -300,7 +301,8 @@ export class OmemoClient {
             deviceList = await this.client.getOmemoItems(jid, NS_OMEMO_1_DEVICES);
             this.actualizedOpponentDevices.add(jid);
         } catch (e) {
-            console.error(`[OmemoClient][getAnnouncedDevices] get items for ${jid} error`, e);
+            // Server timeout or node not found — return cached or empty
+            console.warn(`[OmemoClient][getAnnouncedDevices] get items for ${jid} failed`, (e as any)?.error?.condition || e);
             return [];
         }
 
@@ -308,7 +310,7 @@ export class OmemoClient {
         try {
             devices = deviceList?.pubsub?.retrieve?.item?.deviceList?.devices || [];
         } catch (e) {
-            console.error('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
+            console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
         }
 
         devices = this.processDevices(devices);
@@ -422,7 +424,11 @@ export class OmemoClient {
 
         if (!announcedDeviceIds.includes(registrationId)) {
             announcedDevices.push(this.buildDeviceInfo(registrationId));
-            await this.announceDevices(announcedDevices, isNew ? registrationId : null);
+            try {
+                await this.announceDevices(announcedDevices, isNew ? registrationId : null);
+            } catch (e) {
+                console.warn('[OmemoClient][announce] announceDevices failed (server timeout?), continuing', e);
+            }
         }
 
         const keyBundle = await this.getDeviceKeyBundle(this.client.jid, registrationId);
@@ -441,10 +447,14 @@ export class OmemoClient {
         const clientJidBare =
             typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
 
-        await this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
-            id: registrationId,
-            bundle
-        });
+        try {
+            await this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
+                id: registrationId,
+                bundle
+            });
+        } catch (e) {
+            console.warn('[OmemoClient][announce] publishOmemoBundle failed (server timeout?), continuing', e);
+        }
     }
 
     async refillPreKeys(keyBundle: any, removePreKey: number | null = null): Promise<any> {
@@ -564,8 +574,10 @@ export class OmemoClient {
             (key: any) => `${key.rid}` === `${localDeviceId}`
         );
 
-        const senderJid =
-            message.type === 'groupchat' ? message.from?.resource : message.from?.bare;
+        // v12: message.from is a plain string JID, not a JID object
+        const fromStr = typeof message.from === 'string' ? message.from : String(message.from ?? '');
+        const senderJid: string =
+            (message.type === 'groupchat' ? JID.getResource(fromStr) : JID.toBare(fromStr)) ?? fromStr;
         const currentSenderDevice = parseInt(header?.sid, 10);
 
         let req = this.getAnnouncedDeviceIdsRequests[senderJid];
@@ -608,7 +620,9 @@ export class OmemoClient {
 
     async decryptWhisper(message: any, key: any): Promise<ArrayBuffer> {
         const isMUC = message.type === 'groupchat';
-        const storeKey = isMUC ? message.from?.resource : message.from?.bare;
+        // v12: message.from is a plain string JID, not a JID object
+        const fromStr = typeof message.from === 'string' ? message.from : String(message.from ?? '');
+        const storeKey: string = (isMUC ? JID.getResource(fromStr) : JID.toBare(fromStr)) ?? fromStr;
 
         let whisper = await this.store.getWhisper(storeKey, message.id);
         if (whisper) {
@@ -616,7 +630,7 @@ export class OmemoClient {
         }
 
         const address = new SignalProtocolAddress(
-            isMUC ? message.from?.resource : message.from?.bare,
+            storeKey,
             message.encrypted?.header?.sid
         );
         const session = new SessionCipher(this.store, address);

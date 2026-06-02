@@ -195,7 +195,7 @@ export class OmemoClient {
     }
     getAnnouncedDevices(jid_1) {
         return __awaiter(this, arguments, void 0, function* (jid, force = true) {
-            var _a, _b, _c, _d;
+            var _a, _b, _c, _d, _e, _f;
             let localUserJid = this.client.jid;
             const localUserJidBare = typeof localUserJid === 'string' ? localUserJid : JID.toBare(localUserJid);
             if (!jid || jid === localUserJidBare) {
@@ -209,7 +209,8 @@ export class OmemoClient {
                     });
                 }
                 catch (e) {
-                    console.error(`[OmemoClient][getAnnouncedDevices] subscribe to user ${jid}`, e);
+                    // Server may not support PEP subscriptions — not fatal, continue with getItems
+                    console.warn(`[OmemoClient][getAnnouncedDevices] subscribe to user ${jid} failed (server may not support PEP)`, ((_a = e === null || e === void 0 ? void 0 : e.error) === null || _a === void 0 ? void 0 : _a.condition) || e);
                 }
                 this.subscriptions.add(jid);
             }
@@ -222,15 +223,16 @@ export class OmemoClient {
                 this.actualizedOpponentDevices.add(jid);
             }
             catch (e) {
-                console.error(`[OmemoClient][getAnnouncedDevices] get items for ${jid} error`, e);
+                // Server timeout or node not found — return cached or empty
+                console.warn(`[OmemoClient][getAnnouncedDevices] get items for ${jid} failed`, ((_b = e === null || e === void 0 ? void 0 : e.error) === null || _b === void 0 ? void 0 : _b.condition) || e);
                 return [];
             }
             let devices = [];
             try {
-                devices = ((_d = (_c = (_b = (_a = deviceList === null || deviceList === void 0 ? void 0 : deviceList.pubsub) === null || _a === void 0 ? void 0 : _a.retrieve) === null || _b === void 0 ? void 0 : _b.item) === null || _c === void 0 ? void 0 : _c.deviceList) === null || _d === void 0 ? void 0 : _d.devices) || [];
+                devices = ((_f = (_e = (_d = (_c = deviceList === null || deviceList === void 0 ? void 0 : deviceList.pubsub) === null || _c === void 0 ? void 0 : _c.retrieve) === null || _d === void 0 ? void 0 : _d.item) === null || _e === void 0 ? void 0 : _e.deviceList) === null || _f === void 0 ? void 0 : _f.devices) || [];
             }
             catch (e) {
-                console.error('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
+                console.warn('[OmemoClient][getAnnouncedDevices] error parsing devices list', e);
             }
             devices = this.processDevices(devices);
             yield this.storeDevices(jid, devices);
@@ -333,7 +335,12 @@ export class OmemoClient {
             }
             if (!announcedDeviceIds.includes(registrationId)) {
                 announcedDevices.push(this.buildDeviceInfo(registrationId));
-                yield this.announceDevices(announcedDevices, isNew ? registrationId : null);
+                try {
+                    yield this.announceDevices(announcedDevices, isNew ? registrationId : null);
+                }
+                catch (e) {
+                    console.warn('[OmemoClient][announce] announceDevices failed (server timeout?), continuing', e);
+                }
             }
             const keyBundle = yield this.getDeviceKeyBundle(this.client.jid, registrationId);
             if (keyBundle &&
@@ -345,10 +352,15 @@ export class OmemoClient {
             }
             const bundle = yield this.refillPreKeys(keyBundle, removePreKey);
             const clientJidBare = typeof this.client.jid === 'string' ? this.client.jid : JID.toBare(this.client.jid);
-            yield this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
-                id: registrationId,
-                bundle
-            });
+            try {
+                yield this.client.publishOmemoBundle(clientJidBare, NS_OMEMO_1_BUNDLES, {
+                    id: registrationId,
+                    bundle
+                });
+            }
+            catch (e) {
+                console.warn('[OmemoClient][announce] publishOmemoBundle failed (server timeout?), continuing', e);
+            }
         });
     }
     refillPreKeys(keyBundle_1) {
@@ -435,7 +447,9 @@ export class OmemoClient {
             const header = (_a = message.encrypted) === null || _a === void 0 ? void 0 : _a.header;
             const localDeviceId = yield this.store.getLocalRegistrationId();
             const keys = ((header === null || header === void 0 ? void 0 : header.keys) || []).filter((key) => `${key.rid}` === `${localDeviceId}`);
-            const senderJid = message.type === 'groupchat' ? (_b = message.from) === null || _b === void 0 ? void 0 : _b.resource : (_c = message.from) === null || _c === void 0 ? void 0 : _c.bare;
+            // v12: message.from is a plain string JID, not a JID object
+            const fromStr = typeof message.from === 'string' ? message.from : String((_b = message.from) !== null && _b !== void 0 ? _b : '');
+            const senderJid = (_c = (message.type === 'groupchat' ? JID.getResource(fromStr) : JID.toBare(fromStr))) !== null && _c !== void 0 ? _c : fromStr;
             const currentSenderDevice = parseInt(header === null || header === void 0 ? void 0 : header.sid, 10);
             let req = this.getAnnouncedDeviceIdsRequests[senderJid];
             if (!req) {
@@ -469,14 +483,16 @@ export class OmemoClient {
     }
     decryptWhisper(message, key) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d, _e, _f;
+            var _a, _b, _c, _d;
             const isMUC = message.type === 'groupchat';
-            const storeKey = isMUC ? (_a = message.from) === null || _a === void 0 ? void 0 : _a.resource : (_b = message.from) === null || _b === void 0 ? void 0 : _b.bare;
+            // v12: message.from is a plain string JID, not a JID object
+            const fromStr = typeof message.from === 'string' ? message.from : String((_a = message.from) !== null && _a !== void 0 ? _a : '');
+            const storeKey = (_b = (isMUC ? JID.getResource(fromStr) : JID.toBare(fromStr))) !== null && _b !== void 0 ? _b : fromStr;
             let whisper = yield this.store.getWhisper(storeKey, message.id);
             if (whisper) {
                 return whisper;
             }
-            const address = new SignalProtocolAddress(isMUC ? (_c = message.from) === null || _c === void 0 ? void 0 : _c.resource : (_d = message.from) === null || _d === void 0 ? void 0 : _d.bare, (_f = (_e = message.encrypted) === null || _e === void 0 ? void 0 : _e.header) === null || _f === void 0 ? void 0 : _f.sid);
+            const address = new SignalProtocolAddress(storeKey, (_d = (_c = message.encrypted) === null || _c === void 0 ? void 0 : _c.header) === null || _d === void 0 ? void 0 : _d.sid);
             const session = new SessionCipher(this.store, address);
             const keyData = OmemoUtils.base64StringToArrayBuffer(key.content);
             let plaintext;
