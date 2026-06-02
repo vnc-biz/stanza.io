@@ -1,22 +1,19 @@
 # stanza.io Migration Guide
 ## omemo-fix-subscription (v9) → upstream-v12-with-omemo (v12)
 
-This document is a complete reference for migrating a consumer project from the old VNC
-`omemo-fix-subscription` branch to the new `upstream-v12-with-omemo` branch. Every function,
-parameter, event, and type that changes is listed here.
+Complete reference for migrating a consumer project. Every entry is verified against
+actual source code of both branches.
 
 ---
 
 ## 1. Package Identity
 
-| | v9 (old) | v12 (new) |
+| | v9 (`omemo-fix-subscription`) | v12 (`upstream-v12-with-omemo`) |
 |---|---|---|
-| **npm name** | `stanza.io` | `stanza` |
-| **version** | `9.1.0` | `12.22.1` |
-| **main entry** | `index.js` (source) | `dist/cjs/index.js` (compiled) |
-| **language** | JavaScript | TypeScript (types included) |
-
-**Update your import alias** in the consumer project:
+| npm name | `stanza.io` | `stanza` |
+| version | `9.1.0` | `12.22.1` |
+| main entry | `index.js` (raw JS source) | `dist/cjs/index.js` (compiled) |
+| language | JavaScript | TypeScript (type declarations included) |
 
 ```ts
 // OLD
@@ -26,75 +23,188 @@ const { OmemoClient, OmemoStorage, OmemoUtils } = require('stanza.io/lib/plugins
 // NEW
 import * as Stanza from 'stanza';
 import { OmemoClient, OmemoStorage, OmemoUtils } from 'stanza/dist/cjs/plugins/omemo';
-// or if using TypeScript source directly:
-import { OmemoClient, OmemoStorage, OmemoUtils } from 'stanza/src/plugins/omemo';
 ```
 
 ---
 
-## 2. Client Creation
+## 2. Top-Level Exports
+
+### Kept
+| Export | Notes |
+|---|---|
+| `createClient(opts)` | Same call signature |
+| `Client` | Now a class, same name |
+| `VERSION` | Now a real semver string, not `'__STANZAIO_VERSION__'` |
+
+### Changed
+| v9 | v12 | Notes |
+|---|---|---|
+| `Stanza.JID` — a **class constructor** | `Stanza.JID` — a **utility module** | `new JID(str)` is gone — see §8 |
+| `Stanza.Omemo` | Not top-level exported | Import from `stanza/dist/cjs/plugins/omemo` |
+| `Stanza.Hints` | Not top-level exported | Plugin loaded automatically |
+
+### New in v12
+| Export | Purpose |
+|---|---|
+| `Stanza.Constants` | Error codes, stream conditions |
+| `Stanza.Namespaces` | All namespace strings (`NS_OMEMO_1`, `NS_PUBSUB`, etc.) |
+| `Stanza.Stanzas` | All protocol types (Message, IQ, Presence, …) |
+| `Stanza.JXT` | jxt registry and parser |
+| `Stanza.Utils` | Internal utilities |
+| `Stanza.Platform` | Browser vs Node detection |
+| `Stanza.RSM` | Result Set Management helpers |
+| `Stanza.RTT` | Real-Time Text helpers |
+| `Stanza.DataForms` | Data forms helpers |
+| `Stanza.Jingle` | Jingle session management |
+| `Stanza.SASL` | SASL mechanism factory |
+
+---
+
+## 3. Configuration
 
 ```ts
-// OLD
-const client = Stanza.createClient({ jid, password, wsURL, ... });
+// v9 config keys
+{
+    jid: 'user@domain',           // jid was parsed to JID object internally
+    password: 'secret',
+    wsURL: 'wss://...',           // WebSocket URL
+    boshURL: 'https://...',       // BOSH URL
+    transports: ['websocket'],    // array of strings
+    sasl: ['scram-sha-1', 'plain'],
+    timeout: 15,                  // IQ timeout in seconds
+    useStreamManagement: true,
+}
 
-// NEW — same API, different config type (now typed)
-const client = Stanza.createClient({ jid, password, wsURL, ... });
+// v12 config keys
+{
+    jid: 'user@domain',           // stays a plain string throughout
+    password: 'secret',
+    transports: {                 // NOW an object, not array
+        websocket: 'wss://...',   // string = explicit URL
+        bosh: false,              // false = disable transport
+    },
+    // OR: pass true to let library auto-discover endpoints
+    transports: { websocket: true },
+    transportPreferenceOrder: ['websocket', 'bosh'],  // NEW
+    sasl: ['SCRAM-SHA-1', 'PLAIN'],  // mechanism names may differ
+    timeout: 15,                  // IQ timeout in seconds — same
+    useStreamManagement: true,    // same
+    allowResumption: true,        // NEW — enable SM resume on reconnect (default: true)
+    autoReconnect: false,         // NEW — built-in reconnect (default: false)
+    maxReconnectBackoff: 32,      // NEW — max backoff seconds (default: 32)
+    lang: 'en',                   // NEW
+    acceptLanguages: ['en'],      // NEW
+    server: 'domain.com',         // NEW — override server domain
+    resource: 'myapp',            // NEW — request specific resource
+}
 ```
 
-No change to `createClient()` call signature. The config object gains more optional fields
-(see §9 Configuration Reference).
+> ⚠️ `wsURL` and `boshURL` are **gone**. Pass URLs via the `transports` object:
+> ```ts
+> transports: { websocket: 'wss://domain:5443/ws', bosh: false }
+> ```
 
 ---
 
-## 3. Connection & Disconnection
+## 4. Client Methods
 
 ### `connect()`
 
 ```ts
-// OLD — synchronous, no return value
+// v9 — pass opts each time
 client.connect(opts);
+client.connect(opts, { name: 'websocket', url: 'wss://...' });
 
-// NEW — async, opts merged into existing config (or pass nothing to use stored config)
-await client.connect();          // uses config from createClient()
-await client.connect(extraOpts); // merges extra opts before connecting
+// v12 — opts stored at createClient time; connect() uses stored config
+client.connect();
+// Can also pass additional opts to merge before connecting:
+client.connect({ jid: 'other@domain' });
 ```
 
 ### `disconnect()`
 
 ```ts
-// OLD
-client.disconnect();        // graceful
-client.disconnect(true);    // force (emits 'disconnected' TWICE — bug)
+// v9
+client.disconnect();        // graceful (sends stream close)
+client.disconnect(true);    // force (skips stream close — also emits 'disconnected' TWICE, a bug)
 
-// NEW
-client.disconnect();        // always graceful + 1s hard-timeout fallback
-                            // no force parameter — always single emit
+// v12
+client.disconnect();        // always graceful + automatic 1-second hard-timeout fallback
+                            // force parameter REMOVED — no longer needed
 ```
 
-> ⚠️ **Remove all `client.disconnect(true)` calls.** The `force` parameter no longer exists.
-> The new transport handles forced close internally via a 1-second timeout.
+> ⚠️ Remove all `client.disconnect(true)` calls.
+
+### `sendIq()` → `sendIQ()`
+
+```ts
+// v9 — lowercase 'q', supports callback
+const result = await client.sendIq({ type: 'get', to: jid, ... });
+client.sendIq({ ... }, (err, result) => { ... });   // callback form
+
+// v12 — uppercase 'Q', promise only
+const result = await client.sendIQ({ type: 'get', to: jid, ... });
+// callback form REMOVED
+```
+
+### `sendMessage()` / `sendPresence()` — unchanged
+
+```ts
+// Both v9 and v12 — same signature, same return value (ID string)
+const id = client.sendMessage({ to, body, type: 'chat' });
+const id = client.sendPresence({ show: 'away' });
+```
+
+### `getCredentials()`
+
+```ts
+// v9 — callback
+client.getCredentials((err, creds) => { ... });
+
+// v12 — async
+const creds = await client.getCredentials();
+```
+
+### New methods in v12
+
+```ts
+// Convenience IQ reply helpers — no equivalent in v9
+client.sendIQResult(originalIQ, { ...replyData });
+client.sendIQError(originalIQ, { error: { condition: 'item-not-found' } });
+
+// Config update at runtime
+client.updateConfig({ timeout: 30 });
+```
+
+### Removed in v12
+
+| v9 method | Reason removed |
+|---|---|
+| `client.discoverBindings(server, cb)` | Internal to `connect()` now |
+| `client.releaseGroup(group)` | WildEmitter concept — replaced by EventEmitter |
 
 ---
 
-## 4. Events — Full Mapping
+## 5. Events
 
-### 4.1 Core Client Events
+### Core events — mapping
 
-| v9 Event | v12 Event | Notes |
+| v9 | v12 | Notes |
 |---|---|---|
-| `'disconnected'` | `'--transport-disconnected'` | **Critical rename.** The old `'disconnected'` is still emitted but only as a pass-through from SM layer; use `'--transport-disconnected'` for reconnect logic |
+| `'disconnected'` | `'disconnected'` | ✅ Same name. In v12 fires **after** queue drain + SM hibernate, so slightly later but guaranteed single emit |
+| `'auth:success'` | *(removed)* | Use `'session:started'` instead |
 | `'session:started'` | `'session:started'` | ✅ Same |
 | `'session:end'` | `'session:end'` | ✅ Same |
 | `'stream:start'` | `'stream:start'` | ✅ Same |
 | `'stream:end'` | `'stream:end'` | ✅ Same |
 | `'stream:error'` | `'stream:error'` | ✅ Same |
 | `'stream:data'` | `'stream:data'` | ✅ Same |
-| `'auth:success'` | *(removed)* | Use `'session:started'` instead |
+| `'stanza'` | `'stanza'` | ✅ Same |
 | `'message'` | `'message'` | ✅ Same |
 | `'chat'` | `'chat'` | ✅ Same |
 | `'groupchat'` | `'groupchat'` | ✅ Same |
 | `'message:error'` | `'message:error'` | ✅ Same |
+| `'message:sent'` | `'message:sent'` | ✅ Same name — **payload changed** (see below) |
 | `'presence'` | `'presence'` | ✅ Same |
 | `'available'` | `'available'` | ✅ Same |
 | `'unavailable'` | `'unavailable'` | ✅ Same |
@@ -102,118 +212,134 @@ client.disconnect();        // always graceful + 1s hard-timeout fallback
 | `'subscribed'` | `'subscribed'` | ✅ Same |
 | `'unsubscribe'` | `'unsubscribe'` | ✅ Same |
 | `'unsubscribed'` | `'unsubscribed'` | ✅ Same |
+| `'presence:error'` | `'presence:error'` | ✅ Same |
 | `'raw:incoming'` | `'raw:incoming'` | ✅ Same |
 | `'raw:outgoing'` | `'raw:outgoing'` | ✅ Same |
-| *(not present)* | `'message:sent'` | NEW — fires when message leaves the queue |
-| *(not present)* | `'message:acked'` | NEW — SM ack received |
-| *(not present)* | `'message:failed'` | NEW — SM gave up on stanza |
-| *(not present)* | `'message:hibernated'` | NEW — stanza buffered during disconnect |
-| *(not present)* | `'stanza:failed'` | NEW — any stanza type failed |
-| *(not present)* | `'stanza:acked'` | NEW — any stanza type acked |
-| *(not present)* | `'stanza:hibernated'` | NEW — any stanza type hibernated |
+| `'iq:get:*'` / `'iq:set:*'` | `'iq:get:*'` / `'iq:set:*'` | ✅ Same pattern |
+| `'id:*'` | *(removed)* | Use `'iq:id:*'` or `'message:id:*'` |
+| *(not present)* | `'connected'` | NEW — TCP connected (before stream open) |
 | *(not present)* | `'session:bound'` | NEW — resource bound |
 | *(not present)* | `'session:prebind'` | NEW — pre-bind state |
-| *(not present)* | `'connected'` | NEW — transport TCP connected (before stream open) |
-| *(not present)* | `'bosh:terminate'` | NEW — BOSH session ended |
+| *(not present)* | `'stanza:acked'` | NEW — SM ack received for any stanza type |
+| *(not present)* | `'stanza:failed'` | NEW — SM gave up on any stanza type |
+| *(not present)* | `'stanza:hibernated'` | NEW — stanza buffered during disconnect |
+| *(not present)* | `'message:acked'` | NEW — SM ack received for a message |
+| *(not present)* | `'message:failed'` | NEW — SM gave up on a message |
+| *(not present)* | `'message:hibernated'` | NEW — message buffered during disconnect |
+| *(not present)* | `'message:retry'` | NEW — message being replayed after reconnect |
 
-### 4.2 Disconnection Event — No Change for Consumer Code
+### `'message:sent'` payload change
 
 ```ts
-// Both v9 and v12 — keep listening to 'disconnected'
+// v9 — emitted with one argument: the message JSON object
+client.on('message:sent', (msg) => {
+    console.log(msg.id, msg.body);
+});
+
+// v12 — emitted with TWO arguments: message + viaCarbon boolean
+client.on('message:sent', (msg, viaCarbon) => {
+    console.log(msg.id, msg.body, viaCarbon);
+});
+```
+
+### `'auth:success'` → `'session:started'`
+
+```ts
+// v9
+client.on('auth:success', () => { /* authenticated */ });
+
+// v12 — use session:started (was also available in v9)
+client.on('session:started', () => { /* session ready */ });
+```
+
+### `'disconnected'` — same name, better timing
+
+```ts
+// Both v9 and v12 — same listener
 client.on('disconnected', () => {
     scheduleReconnect();
 });
+// In v12 this fires after queue drain + SM hibernation, so it is safe
+// to start reconnecting immediately in this handler.
 ```
 
-> **How it works in v12:** The transport emits the internal `'--transport-disconnected'`
-> signal when the socket closes. The Client listens to that internally, drains its queues,
-> calls `sm.hibernate()`, runs auto-reconnect (if `autoReconnect: true` is configured),
-> and *then* emits `'disconnected'` for consumer code. So `'disconnected'` is still the
-> correct event to listen to — it now fires later (after queues drain) which is safer.
->
-> `'--transport-disconnected'` is an internal event — do not listen to it in your app.
-
-### 4.3 PubSub Events
-
-| v9 Event | v12 Event | Payload change |
-|---|---|---|
-| `'pubsub:event'` | `'pubsub:event'` | Structure changed (see §7) |
-| `'pubsubEvent'` | *(removed)* | Use `'pubsub:event'` only |
-| `'pubsub:published'` | `'pubsub:published'` | ✅ Same name |
-| `'pubsub:retracted'` | `'pubsub:retracted'` | ✅ Same name |
-| `'pubsub:purged'` | `'pubsub:purged'` | ✅ Same name |
-| `'pubsub:deleted'` | `'pubsub:deleted'` | ✅ Same name |
-| `'pubsub:subscription'` | `'pubsub:subscription'` | ✅ Same name |
-| `'pubsub:config'` | `'pubsub:config'` | ✅ Same name |
-| `'pubsub:affiliation'` | `'pubsub:affiliations'` | **Renamed** (added 's') |
-
-### 4.4 PubSub Event Payload Structure Change
-
-The `'pubsub:event'` payload structure changed — critical for OMEMO device list handling:
-
-```ts
-// OLD — msg.event.updated.published[0].deviceList.devices
-client.on('pubsub:event', (msg) => {
-    if (msg.event.updated.node === 'urn:xmpp:omemo:1:devices') {
-        const devices = msg.event.updated.published[0].deviceList.devices;
-    }
-});
-
-// NEW — msg.pubsub.items.published[0].deviceList.devices
-client.on('pubsub:event', (msg) => {
-    if (msg.pubsub?.items?.node === 'urn:xmpp:omemo:1:devices') {
-        const devices = msg.pubsub.items.published[0]?.deviceList?.devices;
-    }
-});
-```
-
-| Path | v9 | v12 |
-|---|---|---|
-| Node name | `msg.event.updated.node` | `msg.pubsub.items.node` |
-| Published items | `msg.event.updated.published` | `msg.pubsub.items.published` |
-| Sender JID | `msg.from` (string) | `msg.from` (string \| JID object) |
+> **Note:** `'--transport-disconnected'` is an **internal** event used inside Client.ts.
+> Do not listen to it in application code.
 
 ---
 
-## 5. IQ / Send Methods
+## 6. PubSub Events
 
-### `sendIq()` → `sendIQ()`
+### Event names
+
+| v9 | v12 | Notes |
+|---|---|---|
+| `'pubsub:event'` | `'pubsub:event'` | ✅ Same — **payload structure changed** (see below) |
+| `'pubsubEvent'` | *(removed)* | Was an alias — use `'pubsub:event'` only |
+| `'pubsub:published'` | `'pubsub:published'` | ✅ Same |
+| `'pubsub:retracted'` | `'pubsub:retracted'` | ✅ Same |
+| `'pubsub:purged'` | `'pubsub:purged'` | ✅ Same |
+| `'pubsub:deleted'` | `'pubsub:deleted'` | ✅ Same |
+| `'pubsub:subscription'` | `'pubsub:subscription'` | ✅ Same |
+| `'pubsub:config'` | `'pubsub:config'` | ✅ Same |
+| `'pubsub:affiliation'` | `'pubsub:affiliations'` | ⚠️ **Renamed** — added `'s'` |
+
+### `'pubsub:event'` payload structure — BREAKING CHANGE
+
+The message object structure changed completely because v12 uses a different XML parsing layer.
 
 ```ts
-// OLD — callback or promise, lowercase 'q'
-client.sendIq({ type: 'get', to: jid, ... }, (err, result) => { ... });
-// or
-const result = await client.sendIq({ ... });
+// v9 — payload lives under msg.event
+client.on('pubsub:event', (msg) => {
+    // Check if it is an items event
+    if (msg.event.updated) {
+        const node      = msg.event.updated.node;        // node name
+        const published = msg.event.updated.published;   // array of items
+        const retracted = msg.event.updated.retracted;   // array of retracted IDs
+    }
+    if (msg.event.purged)             { /* node purged */ }
+    if (msg.event.deleted)            { /* node deleted */ }
+    if (msg.event.subscriptionChanged){ /* subscription changed */ }
+    if (msg.event.configurationChanged){ /* config changed */ }
+});
 
-// NEW — promise only, camelCase 'IQ'
-const result = await client.sendIQ({ type: 'get', to: jid, ... });
+// v12 — payload lives under msg.pubsub
+client.on('pubsub:event', (msg) => {
+    // Check if it is an items event
+    if (msg.pubsub.items) {
+        const node      = msg.pubsub.items.node;         // node name
+        const published = msg.pubsub.items.published;    // array of items
+        const retracted = msg.pubsub.items.retracted;    // array of retracted IDs
+    }
+    // eventType indicates other event kinds
+    if (msg.pubsub.eventType === 'purge')        { /* node purged */ }
+    if (msg.pubsub.eventType === 'delete')       { /* node deleted */ }
+    if (msg.pubsub.eventType === 'subscription') { /* subscription changed */ }
+    if (msg.pubsub.eventType === 'configuration'){ /* config changed */ }
+});
 ```
 
-> ⚠️ **Remove all callbacks from sendIq calls.** Callback form is gone. Convert to `await`.
-
-### `sendMessage()` / `sendPresence()`
+### Full path comparison for OMEMO device list events
 
 ```ts
-// Both unchanged in signature — return the stanza ID string
-const id = client.sendMessage({ to, body, type: 'chat' });
-const id = client.sendPresence({ show: 'away' });
-```
+// v9 — path to OMEMO device list in pubsub:event
+msg.event.updated.node                         // === 'urn:xmpp:omemo:1:devices'
+msg.event.updated.published[0].deviceList.devices  // OmemoDeviceInfo[]
+msg.from                                       // string (already bare in practice)
 
-### New IQ helpers
-
-```ts
-// NEW — convenience helpers for IQ responses (no equivalent in v9)
-client.sendIQResult(originalIQ, { ... });
-client.sendIQError(originalIQ, { condition: 'item-not-found' });
+// v12 — path to OMEMO device list in pubsub:event
+msg.pubsub.items.node                          // === 'urn:xmpp:omemo:1:devices'
+msg.pubsub.items.published[0].deviceList.devices   // OmemoDeviceInfo[]
+msg.from                                       // string (use JID.toBare() to ensure bare)
 ```
 
 ---
 
-## 6. PubSub Methods — Signatures
+## 7. PubSub Methods
 
-All pubsub methods are now **promise-only** (no callback parameter).
+All methods are now **promise-only** — callback parameter removed.
 
-| Method | v9 Signature | v12 Signature |
+| Method | v9 signature | v12 signature |
 |---|---|---|
 | `subscribeToNode` | `(jid, opts, cb?)` | `(jid, opts): Promise<PubsubSubscriptionWithOptions>` |
 | `unsubscribeFromNode` | `(jid, opts, cb?)` | `(jid, opts): Promise<PubsubSubscription>` |
@@ -228,13 +354,13 @@ All pubsub methods are now **promise-only** (no callback parameter).
 | `getAffiliations` | `(jid, opts, cb?)` | `(jid, node?): Promise<IQ>` |
 | `getNodeSubscribers` | `(jid, node, opts, cb?)` | `(jid, node, opts?): Promise<IQ>` |
 | `updateNodeSubscriptions` | `(jid, node, delta, cb?)` | `(jid, node, delta): Promise<IQ>` |
-| `getNodeAffiliations` | `(jid, node, opts, cb?)` | `(jid, node): Promise<PubsubAffiliations>` |
+| `getNodeAffiliations` | `(jid, node, cb?)` | `(jid, node): Promise<PubsubAffiliations>` |
 | `updateNodeAffiliations` | `(jid, node, delta, cb?)` | `(jid, node, items): Promise<IQ>` |
 | `publishOmemoDevice` | `(jid, node, item, cb?)` | `(jid, node, item): Promise<any>` |
 | `publishOmemoBundle` | `(jid, node, item, cb?)` | `(jid, node, item): Promise<any>` |
 | `getOmemoItems` | `(jid, node, opts, cb?)` | `(jid, node, opts?): Promise<any>` |
 
-**New pubsub methods in v12 (no equivalent in v9):**
+**New in v12 — no equivalent in v9:**
 
 | Method | Signature |
 |---|---|
@@ -245,39 +371,36 @@ All pubsub methods are now **promise-only** (no callback parameter).
 
 ---
 
-## 7. OMEMO — Detailed Diff
+## 8. OMEMO
 
-### 7.1 Imports
+### 8.1 Import path
 
 ```ts
-// OLD
+// v9
 const { OmemoClient, OmemoStorage, OmemoUtils } = require('stanza.io/lib/plugins/omemo');
 
-// NEW
+// v12
 import { OmemoClient, OmemoStorage, OmemoUtils, OmemoDeviceInfo } from 'stanza/dist/cjs/plugins/omemo';
 ```
 
-### 7.2 `client.createOmemo(store)` — unchanged
+### 8.2 `client.createOmemo(store)` — unchanged
 
 ```ts
-// Both v9 and v12 — same call
+// Both v9 and v12
 client.createOmemo(myStore);
 // Result: client.omemo is now an OmemoClient instance
 ```
 
-### 7.3 `OmemoStorage` — Sync → Async
+### 8.3 `OmemoStorage` — sync → async (BREAKING)
 
-**This is the most impactful breaking change for consumers.**
+Every method that returned a value synchronously now returns a `Promise`.
+Your concrete storage implementation **must** be updated to return Promises.
 
-Every method in `OmemoStorage` was synchronous in v9 (threw `NotImplementedError`). In v12
-they are all `async`/`Promise`-returning. Your concrete storage implementation must return
-Promises for all methods.
-
-| Method | v9 Return | v12 Return |
+| Method | v9 return type | v12 return type |
 |---|---|---|
 | `storeDevices(jid, devices)` | `void` | `Promise<void>` |
 | `getDevices(jid)` | `any[]` | `Promise<OmemoDeviceInfo[]>` |
-| `hasDevices(jid)` | *(did not exist)* | `Promise<boolean>` **NEW — must implement** |
+| `hasDevices(jid)` | **did not exist** | `Promise<boolean>` ← **must add** |
 | `storeWhisper(address, id, whisper)` | `void` | `Promise<void>` |
 | `getWhisper(address, id)` | `any` | `Promise<ArrayBuffer \| null>` |
 | `getLocalRegistrationId()` | `number` | `Promise<number>` |
@@ -299,152 +422,125 @@ Promises for all methods.
 | `removeAllSessions(prefix)` | `void` | `Promise<void>` |
 | `wrapFunction(name, func)` | `void` | `void` (unchanged) |
 
-**`Direction` static property — unchanged:**
+`Direction` static — unchanged:
 ```ts
-OmemoStorage.Direction.SENDING  // = 1
-OmemoStorage.Direction.RECEIVING // = 2
+OmemoStorage.Direction.SENDING   // 1
+OmemoStorage.Direction.RECEIVING // 2
 ```
 
-**Device type change:**
+### 8.4 `OmemoDeviceInfo` — now a typed interface
 
 ```ts
-// OLD — devices were plain objects {id: number, label?: string}
-// NEW — typed as OmemoDeviceInfo
+// v9 — plain object, no type definition
+{ id: number, label?: string }
+
+// v12 — exported TypeScript interface
 export interface OmemoDeviceInfo {
     id: number;
     label?: string;
 }
 ```
 
-### 7.4 `OmemoClient` Methods — Signatures
+### 8.5 `OmemoUtils` — unchanged
 
-All methods unchanged in name and logic. Key parameter type refinements:
+```ts
+OmemoUtils.arrayBufferToBase64String(arrayBuffer)  // same
+OmemoUtils.base64StringToArrayBuffer(str)          // same
+```
 
-| Method | v9 | v12 |
-|---|---|---|
-| `start(platform)` | `start(platform)` | ✅ Same |
-| `getAnnouncedDevices(jid?, force?)` | returns `any[]` | returns `Promise<OmemoDeviceInfo[]>` |
-| `getDeviceKeyBundle(recipient, registrationId)` | `recipient` is `JID\|string` | `recipient` is `string\|any` |
-| `announceDevices(devices, newRegistrationId?)` | ✅ Same | ✅ Same |
-| `announce(device, identityKeyPair, isNew, removePreKey?, isForceGet?)` | ✅ Same | ✅ Same |
-| `refillPreKeys(keyBundle, removePreKey?)` | ✅ Same | ✅ Same |
-| `getRecipientSessions(isMUC, recipient)` | ✅ Same | ✅ Same |
-| `decryptMessage(message)` | returns `Promise<ArrayBuffer\|null>` | ✅ Same |
-| `decryptWhisper(message, key)` | returns `Promise<ArrayBuffer>` | ✅ Same |
-| `decryptData(keyData, iv, data)` | `decryptData(keyData, iv, data)` 3 args | `decryptData(subtleCrypto, keyData, iv, data)` **4 args — subtleCrypto added as first param** |
-| `sendMessage(rawMessage, members?, encryptedMsgHint?)` | ✅ Same | ✅ Same |
-| `createMessage(isMUC, plaintext, recipients)` | ✅ Same | ✅ Same |
-| `createHeader(isMUC, key, auth, iv, recipients)` | ✅ Same | ✅ Same |
+### 8.6 `OmemoClient` methods — changes
 
-> ⚠️ **`decryptData` signature changed.** If your code calls this directly, add `window.crypto.subtle`
-> as the first argument. Internal callers (`decryptMessage`) already pass it correctly.
+| Method | Change |
+|---|---|
+| `start(platform)` | ✅ Unchanged |
+| `getAnnouncedDevices(jid?, force?)` | ✅ Unchanged. Return type now `Promise<OmemoDeviceInfo[]>` (was untyped) |
+| `getDeviceKeyBundle(recipient, registrationId)` | ✅ Unchanged |
+| `announceDevices(devices, newRegistrationId?)` | ✅ Unchanged |
+| `announce(device, identityKeyPair, isNew, removePreKey?, isForceGet?)` | ✅ Unchanged |
+| `refillPreKeys(keyBundle, removePreKey?)` | ✅ Unchanged |
+| `getRecipientSessions(isMUC, recipient)` | ✅ Unchanged |
+| `decryptMessage(message)` | ✅ Unchanged |
+| `decryptWhisper(message, key)` | ✅ Unchanged |
+| `decryptData(...)` | ⚠️ **Signature changed** — see below |
+| `sendMessage(rawMessage, members?, hint?)` | ✅ Unchanged |
+| `createMessage(isMUC, plaintext, recipients)` | ✅ Unchanged |
+| `createHeader(isMUC, key, auth, iv, recipients)` | ✅ Unchanged |
 
-### 7.5 OMEMO Stanza Namespace
+### `decryptData` signature change
 
-Both v9 and v12 use `urn:xmpp:omemo:1` — no change required in protocol payloads.
+```ts
+// v9 — 3 parameters, subtleCrypto taken from window.crypto.subtle internally
+async decryptData(keyData, iv, data)
 
-### 7.6 OMEMO PubSub Node Names
+// v12 — 4 parameters, subtleCrypto passed explicitly
+async decryptData(subtleCrypto, keyData, iv, data)
+```
 
-Both versions use the same node names — no change required:
-- `urn:xmpp:omemo:1:devices`
-- `urn:xmpp:omemo:1:bundles`
+> If you call `decryptData` directly, add `window.crypto.subtle` as the first argument.
+> `decryptMessage` handles this internally — no change needed there.
+
+### 8.7 OMEMO node names and namespace — unchanged
+
+```ts
+'urn:xmpp:omemo:1'          // NS_OMEMO_1
+'urn:xmpp:omemo:1:devices'  // NS_OMEMO_1_DEVICES
+'urn:xmpp:omemo:1:bundles'  // NS_OMEMO_1_BUNDLES
+```
 
 ---
 
-## 8. JID Handling
+## 9. JID — Class → Utility Module
 
 ```ts
-// OLD — JID was from 'xmpp-jid' package, imported via Stanza
+// v9 — JID is a class from 'xmpp-jid'
 const { JID } = require('stanza.io');
 const jid = new JID('user@domain/resource');
-jid.bare    // 'user@domain'
-jid.local   // 'user'
-jid.domain  // 'domain'
-jid.resource // 'resource'
+jid.bare       // 'user@domain'
+jid.local      // 'user'
+jid.domain     // 'domain'
+jid.resource   // 'resource'
+jid.full       // 'user@domain/resource'
 
-// NEW — JID is a set of utility functions, not a class
-import * as JID from 'stanza/dist/cjs/JID';
-// or via top-level export:
+// v12 — JID is a module of utility functions (plain strings everywhere)
 import { JID } from 'stanza';
-
-JID.toBare('user@domain/resource')     // 'user@domain'
-JID.getLocal('user@domain/resource')   // 'user'
-JID.getDomain('user@domain/resource')  // 'domain'
+JID.toBare('user@domain/resource')      // 'user@domain'
+JID.getLocal('user@domain/resource')    // 'user'
+JID.getDomain('user@domain/resource')   // 'domain'
 JID.getResource('user@domain/resource') // 'resource'
-JID.equal(jid1, jid2)                  // boolean comparison
-JID.parse('user@domain/resource')      // { local, domain, resource }
+JID.parse('user@domain/resource')       // { local, domain, resource }
+JID.equal(jid1, jid2)                   // boolean
+
+// client.jid is now a plain string (was a JID object in v9)
+typeof client.jid === 'string'  // always true in v12
 ```
 
-> ⚠️ **`new JID(...)` is gone.** JID is no longer a class. Replace all `new JID(str)` with
-> `JID.parse(str)` and property access with the utility functions above.
-
-**In OmemoClient internally**, `message.from.bare` and `message.from.resource` from v9 messages
-should be replaced with `JID.toBare(message.from)` and `JID.getResource(message.from)`.
+> ⚠️ Remove all `new JID(str)` usages. Replace `.bare`, `.local`, `.domain`, `.resource`
+> property accesses with the corresponding utility functions.
 
 ---
 
-## 9. Configuration Reference
-
-```ts
-// v9 — example config
-{
-    jid: 'user@domain',
-    password: 'secret',
-    wsURL: 'wss://domain:5443/ws',
-    sasl: ['SCRAM-SHA-1', 'PLAIN'],
-    timeout: 15,            // IQ timeout in seconds
-    useStreamManagement: true,
-}
-
-// v12 — same keys still work, plus new options
-{
-    jid: 'user@domain',
-    password: 'secret',
-    wsURL: 'wss://domain:5443/ws',
-    sasl: ['SCRAM-SHA-1', 'PLAIN'],
-    timeout: 15,            // IQ timeout in seconds (still works)
-    useStreamManagement: true,
-    allowResume: true,      // attempt SM resume on reconnect (new, recommended)
-    transports: ['websocket'], // restrict to WS only (new)
-    lang: 'en',             // stream xml:lang (new)
-    acceptLanguages: ['en'], // accepted languages (new)
-}
-```
-
----
-
-## 10. Stream Management (SM) Changes
+## 10. Stream Management
 
 | Behaviour | v9 | v12 |
 |---|---|---|
-| On disconnect | SM session cleared / `sm.failed()` called | SM hibernates — unacked stanzas buffered |
-| On reconnect | Full re-auth + re-sync | Attempts SM resume, replays buffered stanzas |
-| Unacked stanza fate | Lost | Replayed via `'stanza:hibernated'` events |
-| Window size | 1 (stop-and-wait) | Configurable (default varies) |
-| Access | `client.sm` | `client.sm` (same) |
-
-```ts
-// v9 — manually invalidate SM (do NOT port this pattern)
-client.sm.failed();
-
-// v12 — let the library handle it; only call if you know the server session expired
-client.sm.failed();  // still exists but rarely needed manually
-```
+| On disconnect | SM session cleared (stanzas lost) | SM hibernates — unacked stanzas buffered |
+| On reconnect | Full re-auth, no replay | Attempts SM resume, replays buffered stanzas |
+| Unacked stanza fate | Lost | Surfaced via `'stanza:hibernated'` / `'message:hibernated'` |
+| Accessing SM | `client.sm` | `client.sm` (same) |
+| Invalidating manually | `client.sm.failed()` | `client.sm.failed()` (same, rarely needed) |
 
 ---
 
 ## 11. Plugin Registration
 
 ```ts
-// OLD — plugins auto-loaded inside createClient
+// v9 — plugins loaded inside createClient automatically
 const client = Stanza.createClient(opts);
-// All plugins including omemo loaded automatically
 
-// NEW — same behaviour, plugins auto-loaded in createClient
+// v12 — same, OMEMO plugin is now included automatically
 const client = Stanza.createClient(opts);
-// All plugins including OMEMO loaded automatically via plugins/index.ts
 
-// If you create Client manually and need to load plugins:
+// Manual registration (if using Client directly):
 import { Client } from 'stanza';
 import Plugins from 'stanza/dist/cjs/plugins';
 const client = new Client(opts);
@@ -453,94 +549,9 @@ client.use(Plugins);
 
 ---
 
-## 12. Exports — Complete Diff
+## 12. Namespace Constants
 
-### Removed from v9 top-level exports
-
-| Export | v9 | v12 |
-|---|---|---|
-| `Stanza.JID` (class constructor) | `new Stanza.JID(str)` | Use `Stanza.JID.parse(str)` — now utility module |
-| `Stanza.Hints` | Direct export | Not top-level exported — plugin loaded internally |
-| `Stanza.VERSION` | `'__STANZAIO_VERSION__'` placeholder | Actual version string from Constants |
-
-### New in v12 top-level exports
-
-| Export | Purpose |
-|---|---|
-| `Stanza.Constants` | All XMPP constants (error codes, conditions, stream features) |
-| `Stanza.Namespaces` | All namespace strings including `NS_OMEMO_1`, `NS_OMEMO_1_DEVICES`, etc. |
-| `Stanza.Stanzas` | All protocol types (Message, IQ, Presence, PubsubItem, etc.) |
-| `Stanza.JXT` | jxt registry and parser utilities |
-| `Stanza.Utils` | Internal utilities |
-| `Stanza.Platform` | Platform detection (browser vs node) |
-| `Stanza.RSM` | Result Set Management helpers |
-| `Stanza.RTT` | Real-Time Text helpers |
-| `Stanza.DataForms` | Data forms helpers |
-| `Stanza.Jingle` | Jingle session management |
-| `Stanza.SASL` | SASL mechanism factory |
-
----
-
-## 13. WebSocket Transport — Reconnect Logic Changes
-
-If your `xmpp.service.ts` or equivalent directly interacts with the transport, these changed:
-
-```ts
-// OLD — check transport state
-client.transport.conn          // raw WebSocket object
-client.transport.hasStream     // boolean
-client.transport.closing       // boolean
-
-// NEW — same properties, different class
-client.transport?.stream       // Stream | undefined (typed)
-client.transport?.hasStream    // boolean | undefined
-// client.transport.conn is gone — now private socket
-```
-
-```ts
-// OLD — listen on transport directly
-client.transport.on('disconnected', handler);
-
-// NEW — listen on client as before
-client.on('disconnected', handler);  // same event, fires after queue drain + SM hibernate
-```
-
----
-
-## 14. Migration Checklist
-
-### Critical (must fix before running)
-
-- [ ] Change package name: `stanza.io` → `stanza` in all imports
-- [ ] Replace `new JID(str)` with `JID.parse(str)` / `JID.toBare()` / `JID.getLocal()` etc.
-- [ ] Keep `'disconnected'` listener as-is — it still fires in v12 (after queue drain + SM hibernate)
-- [ ] Remove `client.disconnect(true)` — pass no argument or call `client.disconnect()`
-- [ ] Convert `client.sendIq(...)` → `client.sendIQ(...)` (capital Q)
-- [ ] Remove all pubsub callbacks — convert to `await`
-- [ ] Make all `OmemoStorage` methods return `Promise<T>` instead of `T` synchronously
-- [ ] Add `hasDevices(jid): Promise<boolean>` to your `OmemoStorage` implementation
-- [ ] Replace `auth:success` listener with `session:started`
-
-### PubSub / OMEMO event payload paths
-
-- [ ] Update `'pubsub:event'` handler: `msg.event.updated.node` → `msg.pubsub?.items?.node`
-- [ ] Update `'pubsub:event'` handler: `msg.event.updated.published` → `msg.pubsub.items.published`
-- [ ] Update affiliation event: `'pubsub:affiliation'` → `'pubsub:affiliations'`
-- [ ] Remove `'pubsubEvent'` alias listeners (use `'pubsub:event'` only)
-
-### Recommended (improves reliability)
-
-- [ ] Add `allowResume: true` to connection config
-- [ ] Listen for `'stanza:hibernated'` to track messages buffered during disconnect
-- [ ] Listen for `'message:acked'` / `'message:failed'` for delivery confirmation
-- [ ] Replace dual-driver reconnect logic with single state machine (see XMPP Architecture Review §7)
-- [ ] Add `'--transport-disconnected'` based watchdog instead of polling `reconnectionTimer$`
-
----
-
-## 15. Namespace Constants
-
-All namespace strings are exported from `Stanza.Namespaces`. Use these instead of hardcoded strings:
+Import from `Stanza.Namespaces` instead of hardcoding strings:
 
 ```ts
 import { Namespaces } from 'stanza';
@@ -552,3 +563,32 @@ Namespaces.NS_EME_0            // 'urn:xmpp:eme:0'
 Namespaces.NS_PUBSUB           // 'http://jabber.org/protocol/pubsub'
 Namespaces.NS_CSI_0            // 'urn:xmpp:csi:0'
 ```
+
+---
+
+## 13. Migration Checklist
+
+### Must fix (will break at runtime)
+
+- [ ] Change package name `stanza.io` → `stanza` in all imports
+- [ ] Remove `new JID(str)` — replace with `JID.parse()`, `JID.toBare()`, `JID.getLocal()`, `JID.getDomain()`, `JID.getResource()`
+- [ ] `client.jid` is now a plain `string` — remove any `.bare`, `.local`, `.domain` property accesses on it, use `JID.toBare(client.jid)` etc.
+- [ ] `sendIq` → `sendIQ` (capital Q) — remove all callbacks, convert to `await`
+- [ ] Remove `client.disconnect(true)` — use `client.disconnect()` only
+- [ ] Replace `wsURL`/`boshURL` config keys with `transports: { websocket: 'wss://...' }`
+- [ ] `transports` config is now an **object** not an array — `['websocket']` → `{ websocket: true }`
+- [ ] Replace `'auth:success'` listener with `'session:started'`
+- [ ] Remove `'pubsubEvent'` alias listeners — use `'pubsub:event'` only
+- [ ] Rename `'pubsub:affiliation'` → `'pubsub:affiliations'` (added `'s'`)
+- [ ] Update all `'pubsub:event'` handlers: `msg.event.updated.*` → `msg.pubsub.items.*`
+- [ ] Make every `OmemoStorage` method `async` / return `Promise<T>`
+- [ ] Add `hasDevices(jid): Promise<boolean>` to your `OmemoStorage` implementation
+- [ ] Update `'message:sent'` listener to accept two args: `(msg, viaCarbon)`
+- [ ] Remove `client.discoverBindings()` calls — discovery is internal to `connect()` now
+
+### Recommended
+
+- [ ] Add `allowResumption: true` to config (already default, but make it explicit)
+- [ ] Listen for `'message:hibernated'` / `'stanza:hibernated'` to track buffered messages
+- [ ] Listen for `'message:acked'` / `'message:failed'` for delivery confirmation
+- [ ] Use `Stanza.Namespaces.NS_OMEMO_1` etc. instead of hardcoded namespace strings
