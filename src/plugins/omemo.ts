@@ -711,7 +711,8 @@ export class OmemoClient {
         const authTag = ciphertextWithAuth.slice(ciphertextWithAuth.byteLength - 16);
 
         return {
-            header: await this.createHeader(isMUC, gcmKey.buffer, authTag.buffer, iv.buffer, recipients),
+            // authTag is ArrayBuffer (from ArrayBuffer.slice), not TypedArray — pass directly, no .buffer
+            header: await this.createHeader(isMUC, gcmKey.buffer, authTag, iv.buffer, recipients),
             payload: OmemoUtils.arrayBufferToBase64String(ciphertext)
         };
     }
