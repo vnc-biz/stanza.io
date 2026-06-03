@@ -35,6 +35,10 @@
     ],
     "license": "MIT",
     "main": "./dist/cjs/index.js",
+    "browser": {
+        "./dist/cjs/platform/index.js": "./dist/cjs/platform/browser/index.js",
+        "./dist/cjs/platform/node/index.js": "./dist/cjs/platform/browser/index.js"
+    },
     "files": [
         "dist/"
     ],
