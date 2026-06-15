@@ -148,7 +148,7 @@ const Protocol = [
         aliases: [{ multiple: true, path }],
         element: 'PHOTO',
         fields: {
-            data: (0, jxt_1.childText)(null, 'BINVAL'),
+            data: (0, jxt_1.childTextBuffer)(null, 'BINVAL', 'base64'),
             mediaType: (0, jxt_1.childText)(null, 'TYPE'),
             url: (0, jxt_1.childText)(null, 'EXTVAL')
         },
@@ -160,7 +160,7 @@ const Protocol = [
         aliases: [{ multiple: true, path }],
         element: 'LOGO',
         fields: {
-            data: (0, jxt_1.childText)(null, 'BINVAL'),
+            data: (0, jxt_1.childTextBuffer)(null, 'BINVAL', 'base64'),
             mediaType: (0, jxt_1.childText)(null, 'TYPE'),
             url: (0, jxt_1.childText)(null, 'EXTVAL')
         },

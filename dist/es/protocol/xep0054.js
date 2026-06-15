@@ -4,7 +4,7 @@
 // Source: https://xmpp.org/extensions/xep-0054.html
 // Version: 1.2 (2008-07-16)
 // ====================================================================
-import { childBoolean, childText, multipleChildEnum, multipleChildText, text } from '../jxt';
+import { childBoolean, childText, childTextBuffer, multipleChildEnum, multipleChildText, text } from '../jxt';
 import { NS_VCARD_TEMP } from '../Namespaces';
 const path = 'vcardTemp.records';
 function vcardField(element, type) {
@@ -146,7 +146,7 @@ const Protocol = [
         aliases: [{ multiple: true, path }],
         element: 'PHOTO',
         fields: {
-            data: childText(null, 'BINVAL'),
+            data: childTextBuffer(null, 'BINVAL', 'base64'),
             mediaType: childText(null, 'TYPE'),
             url: childText(null, 'EXTVAL')
         },
@@ -158,7 +158,7 @@ const Protocol = [
         aliases: [{ multiple: true, path }],
         element: 'LOGO',
         fields: {
-            data: childText(null, 'BINVAL'),
+            data: childTextBuffer(null, 'BINVAL', 'base64'),
             mediaType: childText(null, 'TYPE'),
             url: childText(null, 'EXTVAL')
         },

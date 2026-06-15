@@ -9,6 +9,7 @@ import { JID } from '../JID';
 import {
     childBoolean,
     childText,
+    childTextBuffer,
     DefinitionOptions,
     multipleChildEnum,
     multipleChildText,
@@ -282,7 +283,7 @@ const Protocol: DefinitionOptions[] = [
         aliases: [{ multiple: true, path }],
         element: 'PHOTO',
         fields: {
-            data: childText(null, 'BINVAL'),
+            data: childTextBuffer(null, 'BINVAL', 'base64'),
             mediaType: childText(null, 'TYPE'),
             url: childText(null, 'EXTVAL')
         },
@@ -294,7 +295,7 @@ const Protocol: DefinitionOptions[] = [
         aliases: [{ multiple: true, path }],
         element: 'LOGO',
         fields: {
-            data: childText(null, 'BINVAL'),
+            data: childTextBuffer(null, 'BINVAL', 'base64'),
             mediaType: childText(null, 'TYPE'),
             url: childText(null, 'EXTVAL')
         },
